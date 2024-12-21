@@ -1,0 +1,14 @@
+﻿<Project Sdk="Godot.NET.Sdk/4.3.0">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net7.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'ios' ">net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>GodotEGGImporter</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Panda3DEggParser">
+      <HintPath>Panda3DEggParser.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

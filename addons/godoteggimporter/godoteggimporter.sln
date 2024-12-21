@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "godoteggimporter", "godoteggimporter.csproj", "{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		ExportDebug|Any CPU = ExportDebug|Any CPU
+		ExportRelease|Any CPU = ExportRelease|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.ExportDebug|Any CPU.ActiveCfg = ExportDebug|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.ExportDebug|Any CPU.Build.0 = ExportDebug|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.ExportRelease|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.ExportRelease|Any CPU.Build.0 = ExportRelease|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.Release|Any CPU.ActiveCfg = ExportRelease|Any CPU
+		{0F2FFFE1-AC58-4983-AD12-DD48BD112D2D}.Release|Any CPU.Build.0 = ExportRelease|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
