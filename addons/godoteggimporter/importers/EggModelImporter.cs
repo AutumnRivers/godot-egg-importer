@@ -73,6 +73,22 @@ public partial class EggModelImporter : EditorImportPlugin
             {
                 { "name", "automatically_convert_collisions" },
                 { "default_value", true }
+            },
+            new Dictionary()
+            {
+                { "name", "set_materials_to_unshaded" },
+                { "default_value", false }
+            },
+            new Dictionary()
+            {
+                { "name", "convert_model_coordinates" },
+                { "default_value", true }
+            },
+            new Dictionary()
+            {
+                { "name", "change_maps_directory" },
+                { "default_value", "res://maps" },
+                { "property_hint", (int)PropertyHint.Dir }
             }
         };
     }
@@ -87,7 +103,7 @@ public partial class EggModelImporter : EditorImportPlugin
             GD.Print(file.GetError());
             return Error.Failed;
         }
-
+        
         PackedScene scene = new PackedScene();
         Node3D root = createRoot();
         string rootName = savePath.Split(".egg")[0].Split('/').Last();
@@ -107,7 +123,7 @@ public partial class EggModelImporter : EditorImportPlugin
             bool isPolygonGroup = entityGroup.Members.Any(m => m is Polygon);
             if(isPolygonGroup)
             {
-                MeshInstance3D mesh = ParsePolygonGroup(entityGroup, eggData);
+                MeshInstance3D mesh = ParsePolygonGroup(entityGroup, eggData, options);
                 root.AddChild(mesh);
                 mesh.Owner = root;
             }
@@ -134,15 +150,19 @@ public partial class EggModelImporter : EditorImportPlugin
         return new Node3D();
     }
 
-    private MeshInstance3D ParsePolygonGroup(EntityGroup group, Panda3DEgg egg)
+    private MeshInstance3D ParsePolygonGroup(EntityGroup group, Panda3DEgg egg, Dictionary options = null)
     {
         MeshInstance3D meshInstance = new MeshInstance3D();
         ArrayMesh polygonMesh = new ArrayMesh();
         StandardMaterial3D polygonMat = new StandardMaterial3D();
+        if((bool)options["set_materials_to_unshaded"])
+        {
+            polygonMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        }
 
         List<StandardMaterial3D> polygonMats = new()
         {
-            new StandardMaterial3D()
+            polygonMat
         };
         Array<Dictionary> surfaces = new()
         {
@@ -157,12 +177,28 @@ public partial class EggModelImporter : EditorImportPlugin
             }
         };
 
-        // TODO: Seperate surface for each texture
         foreach(Polygon polygon in group.Members.Where(m => m is Polygon))
         {
             string surfaceName = "default_surface";
             if (polygon.TRef != default) surfaceName = polygon.TRef;
             if (!CheckIfSurfaceExists(surfaceName)) AddNewSurface(surfaceName);
+            if(polygon.TRef != default)
+            {
+                TextureGroup polygonTex = polygon.FindTextureInEgg(egg);
+                string filepath = polygonTex.Filepath;
+                if ((string)options["change_maps_directory"] != string.Empty)
+                {
+                    string filename = filepath.Split("maps/")[1];
+                    filepath = (string)options["change_maps_directory"] + '/' + filename;
+                    GD.Print(filepath);
+                }
+                AddTextureFilepathToSurface(surfaceName, filepath);
+                if(FileAccess.FileExists(filepath))
+                {
+                    Texture2D tex = ResourceLoader.Load<Texture2D>(filepath);
+                    AddTextureToMaterial(GetSurfaceMaterialIndex(surfaceName), tex);
+                }
+            }
             Vector3[] verticies = new Vector3[polygon.VertexRef.Indices.Length];
             int vertIndex = 0;
             foreach (var vert in polygon.VertexRef.Indices)
@@ -173,16 +209,12 @@ public partial class EggModelImporter : EditorImportPlugin
                 vertex3 = new Vector3(referencedVertex.X, referencedVertex.Z, referencedVertex.Y);
                 verticies[vertIndex] = vertex3;
                 vertIndex++;
-                //allVerticies.Add(vertex3);
                 if(referencedVertex.UV != default)
                 {
-                    //GD.Print(new Vector2(referencedVertex.UV.U, referencedVertex.UV.V));
-                    //allUVs.Add(new Vector2((float)referencedVertex.UV.U, (float)-referencedVertex.UV.V));
                     var uv = new Vector2((float)referencedVertex.UV.U, (float)-referencedVertex.UV.V);
                     AddUVToSurface(surfaceName, uv);
                 } else
                 {
-                    //allUVs.Add(Vector2.Zero);
                     AddUVToSurface(surfaceName, Vector2.Zero);
                 }
                 if(referencedVertex.RGBA != default)
@@ -201,20 +233,22 @@ public partial class EggModelImporter : EditorImportPlugin
         }
         foreach(var surface in surfaces)
         {
+            // STUPID FIX ALERT // STUPID FIX ALERT //
+            if (((Array<Vector3>)surface["vertices"]).Count <= 0) continue;
+            // END STUPID FIX // END STUPID FIX //
+
             Godot.Collections.Array surfaceArray = new();
             surfaceArray.Resize((int)Mesh.ArrayType.Max);
             surfaceArray[(int)Mesh.ArrayType.Vertex] = ((Array<Vector3>)surface["vertices"]).ToArray();
             surfaceArray[(int)Mesh.ArrayType.TexUV] = ((Array<Vector2>)surface["uvs"]).ToArray();
             surfaceArray[(int)Mesh.ArrayType.Color] = ((Array<Color>)surface["colors"]).ToArray();
-            GD.Print(surfaceArray.Count);
             polygonMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, surfaceArray);
-            int mindex = (int)surface["material_index"];
-            GD.Print($"{mindex} / {polygonMats.Count}");
-            polygonMesh.SurfaceSetMaterial(mindex, polygonMats[mindex]);
+        }
+        for (int i = 0; i < polygonMesh.GetSurfaceCount(); i++)
+        {
+            polygonMesh.SurfaceSetMaterial(i, polygonMats[i]);
         }
 
-        //polygonMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, surfaceArray);
-        //polygonMesh.SurfaceSetMaterial(0, polygonMat);
         meshInstance.Mesh = polygonMesh;
         meshInstance.Name = group.Name;
         return meshInstance;
@@ -231,15 +265,23 @@ public partial class EggModelImporter : EditorImportPlugin
                 { "vertices", new Array<Vector3>() },
                 { "colors", new Array<Color>() }
             });
-            polygonMats.Add(new());
+            StandardMaterial3D mat = new();
+            if ((bool)options["set_materials_to_unshaded"])
+            {
+                mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+            }
+            polygonMats.Add(mat);
         }
 
         void AddVerticesToSurface(string surfaceName, Vector3[] vertices)
         {
+            if (vertices.Length <= 0) return;
             var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
             if (surface == default) return;
             int index = surfaces.IndexOf(surface);
-            ((Array<Vector3>)surfaces[index]["vertices"]).AddRange(vertices);
+            var verts = ((Array<Vector3>)surfaces[index]["vertices"]);
+            verts.AddRange(vertices);
+            surfaces[index]["vertices"] = verts;
         }
 
         void AddUVsToSurface(string surfaceName, Array<Vector2> uvs)
@@ -282,6 +324,27 @@ public partial class EggModelImporter : EditorImportPlugin
         {
             var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
             return surface != default;
+        }
+
+        void AddTextureFilepathToSurface(string surfaceName, string filepath)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return;
+            int index = surfaces.IndexOf(surface);
+            surface["texture_filepath"] = filepath;
+        }
+
+        int GetSurfaceMaterialIndex(string surfaceName)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return -1;
+            int index = surfaces.IndexOf(surface);
+            return (int)surface["material_index"];
+        }
+
+        void AddTextureToMaterial(int idx, Texture2D tex)
+        {
+            polygonMats[idx].AlbedoTexture = tex;
         }
     }
 
