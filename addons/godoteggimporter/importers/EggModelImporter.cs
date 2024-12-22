@@ -110,7 +110,8 @@ public partial class EggModelImporter : EditorImportPlugin
                 MeshInstance3D mesh = ParsePolygonGroup(entityGroup, eggData);
                 root.AddChild(mesh);
                 mesh.Owner = root;
-            } else if(entityGroup.Members.Any(m => m is EntityGroup))
+            }
+            if(entityGroup.Members.Any(m => m is EntityGroup))
             {
                 foreach(var subgroup in entityGroup.Members.Where(m => m is EntityGroup))
                 {
@@ -139,44 +140,149 @@ public partial class EggModelImporter : EditorImportPlugin
         ArrayMesh polygonMesh = new ArrayMesh();
         StandardMaterial3D polygonMat = new StandardMaterial3D();
 
+        List<StandardMaterial3D> polygonMats = new()
+        {
+            new StandardMaterial3D()
+        };
+        Array<Dictionary> surfaces = new()
+        {
+            new()
+            {
+                { "name", "default_surface" },
+                { "material_index", 0 },
+                { "texture_filepath", string.Empty },
+                { "uvs", new Array<Vector2>() },
+                { "vertices", new Array<Vector3>() },
+                { "colors", new Array<Color>() }
+            }
+        };
+
         // TODO: Seperate surface for each texture
-        Godot.Collections.Array surfaceArray = new();
-        surfaceArray.Resize((int)Mesh.ArrayType.Max);
-        List<Vector3> allVerticies = new();
-        List<Vector2> allUVs = new();
         foreach(Polygon polygon in group.Members.Where(m => m is Polygon))
         {
+            string surfaceName = "default_surface";
+            if (polygon.TRef != default) surfaceName = polygon.TRef;
+            if (!CheckIfSurfaceExists(surfaceName)) AddNewSurface(surfaceName);
             Vector3[] verticies = new Vector3[polygon.VertexRef.Indices.Length];
             int vertIndex = 0;
             foreach (var vert in polygon.VertexRef.Indices)
             {
                 Vector3 vertex3;
                 Vertex referencedVertex = GetVertexFromPool(egg, vert, polygon.VertexRef.Pool);
-                vertex3 = new Vector3(referencedVertex.X, referencedVertex.Y, referencedVertex.Z);
+                // We swap X and Z because Panda3D is a Z-Up game engine
+                vertex3 = new Vector3(referencedVertex.X, referencedVertex.Z, referencedVertex.Y);
                 verticies[vertIndex] = vertex3;
                 vertIndex++;
-                allVerticies.Add(vertex3);
+                //allVerticies.Add(vertex3);
                 if(referencedVertex.UV != default)
                 {
-                    allUVs.Add(new Vector2(referencedVertex.UV.U, referencedVertex.UV.V));
+                    //GD.Print(new Vector2(referencedVertex.UV.U, referencedVertex.UV.V));
+                    //allUVs.Add(new Vector2((float)referencedVertex.UV.U, (float)-referencedVertex.UV.V));
+                    var uv = new Vector2((float)referencedVertex.UV.U, (float)-referencedVertex.UV.V);
+                    AddUVToSurface(surfaceName, uv);
+                } else
+                {
+                    //allUVs.Add(Vector2.Zero);
+                    AddUVToSurface(surfaceName, Vector2.Zero);
+                }
+                if(referencedVertex.RGBA != default)
+                {
+                    Color color = new Color((float)referencedVertex.RGBA.R,
+                        (float)referencedVertex.RGBA.G,
+                        (float)referencedVertex.RGBA.B,
+                        (float)referencedVertex.RGBA.A);
+                    AddColorToSurface(surfaceName, color);
+                } else
+                {
+                    AddColorToSurface(surfaceName, new Color(1, 1, 1, 1));
                 }
             }
+            AddVerticesToSurface(surfaceName, verticies);
         }
-        surfaceArray[(int)Mesh.ArrayType.Vertex] = allVerticies.ToArray();
-        if(allUVs.Any())
+        foreach(var surface in surfaces)
         {
-            surfaceArray[(int)Mesh.ArrayType.TexUV] = allUVs.ToArray();
+            Godot.Collections.Array surfaceArray = new();
+            surfaceArray.Resize((int)Mesh.ArrayType.Max);
+            surfaceArray[(int)Mesh.ArrayType.Vertex] = ((Array<Vector3>)surface["vertices"]).ToArray();
+            surfaceArray[(int)Mesh.ArrayType.TexUV] = ((Array<Vector2>)surface["uvs"]).ToArray();
+            surfaceArray[(int)Mesh.ArrayType.Color] = ((Array<Color>)surface["colors"]).ToArray();
+            GD.Print(surfaceArray.Count);
+            polygonMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, surfaceArray);
+            int mindex = (int)surface["material_index"];
+            GD.Print($"{mindex} / {polygonMats.Count}");
+            polygonMesh.SurfaceSetMaterial(mindex, polygonMats[mindex]);
         }
 
-        // quickfix
-        polygonMat.CullMode = BaseMaterial3D.CullModeEnum.Front;
-
-        polygonMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, surfaceArray);
-        polygonMesh.SurfaceSetMaterial(0, polygonMat);
+        //polygonMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, surfaceArray);
+        //polygonMesh.SurfaceSetMaterial(0, polygonMat);
         meshInstance.Mesh = polygonMesh;
         meshInstance.Name = group.Name;
-        meshInstance.RotateX(Mathf.DegToRad(-90));
         return meshInstance;
+
+        void AddNewSurface(string surfaceName)
+        {
+            if (surfaces.Any(s => (string)s["name"] == surfaceName)) return;
+            surfaces.Add(new()
+            {
+                { "name", surfaceName },
+                { "material_index", surfaces.Count - 1 },
+                { "texture_filepath", string.Empty },
+                { "uvs", new Array<Vector2>() },
+                { "vertices", new Array<Vector3>() },
+                { "colors", new Array<Color>() }
+            });
+            polygonMats.Add(new());
+        }
+
+        void AddVerticesToSurface(string surfaceName, Vector3[] vertices)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return;
+            int index = surfaces.IndexOf(surface);
+            ((Array<Vector3>)surfaces[index]["vertices"]).AddRange(vertices);
+        }
+
+        void AddUVsToSurface(string surfaceName, Array<Vector2> uvs)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return;
+            int index = surfaces.IndexOf(surface);
+            //surfaces[index]["uvs"] = uvs;
+            ((Array<Vector2>)surfaces[index]["uvs"]).AddRange(uvs);
+        }
+
+        void AddUVToSurface(string surfaceName, Vector2 uv)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return;
+            int index = surfaces.IndexOf(surface);
+            //surfaces[index]["uvs"] = uvs;
+            ((Array<Vector2>)surfaces[index]["uvs"]).Add(uv);
+        }
+
+        void AddColorToSurface(string surfaceName, Color color)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return;
+            int index = surfaces.IndexOf(surface);
+            //surfaces[index]["colors"] = colors;
+            ((Array<Color>)surfaces[index]["colors"]).Add(color);
+        }
+
+        void AddColorsToSurface(string surfaceName, Array<Color> colors)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            if (surface == default) return;
+            int index = surfaces.IndexOf(surface);
+            //surfaces[index]["colors"] = colors;
+            ((Array<Color>)surfaces[index]["colors"]).AddRange(colors);
+        }
+
+        bool CheckIfSurfaceExists(string surfaceName)
+        {
+            var surface = surfaces.FirstOrDefault(s => (string)s["name"] == surfaceName);
+            return surface != default;
+        }
     }
 
     private CollisionShape3D ParseCollisionGroup(EntityGroup group)
