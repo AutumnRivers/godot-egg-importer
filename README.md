@@ -16,17 +16,23 @@ This importer makes the process of importing egg files into Godot 1000% faster; 
 
 # What Currently Works
 * Importing models
+    * WARNING: Models are imported using a really, really stupid fix. If things break, let me know.
 * Importing textures
+* Importing collisions
 
 # What Doesn't Currently Work
-* Importing skeletons ("Joints")
 * Importing animations
-* Importing collisions
+    * **TECHNICALLY WORKS**, but is completely broken. Some animations look... okay. Most don't.
+    * I do not recommend using this, at all. The ability to import animations is only provided for testing purposes.
+    * If you're interested in helping me fix this, please check the [animation importer file](./addons/godoteggimporter/importers/EggAnimationImporter.cs).
+
+# What WILL NOT Work
+* Importing Joints ("Skeletons") -- listen, I tried, I really did. It's just impossible to do this from code in Godot.
 
 ---
 
 # Installation
-**This importer *requires* the .NET build of Godot 4.3 or later!**
+**This importer *requires* the .NET build of Godot 4.3 or later, along with .NET 8+!**
 * Clone this repo: `$ git clone https://www.github.com/AutumnRivers/godot-egg-importer`
 * Place the `/addons` folder in the root folder of your Godot project
 * Build your C# project -- *this is an important step!*
@@ -34,12 +40,9 @@ This importer makes the process of importing egg files into Godot 1000% faster; 
 
 ---
 
-# Import Options
-## Force Animation
-**RESERVED FOR FUTURE USE**
-
+# Model Import Options
 ## Automatically Convert Collisions
-**RESERVED FOR FUTURE USE**
+If enabled, automatically converts collision groups into `CollisionShape3D`s and creates a `StaticBody3D` if it doesn't exist. If disabled, collision groups are completely ignored.
 
 ## Set Materials to Unshaded
 Automatically set the `shading_mode` of each material in the model to `ShadingMode.Unshaded`. This is how Panda3D does it, so it's best if you're aiming for that Toontown feel.
@@ -49,3 +52,19 @@ Panda3D is a `Z-Up` game engine, Godot is a `Y-Up` game engine. When this is ena
 
 ## Change Maps Directory
 When set, any filepath in the original egg (e.g., `phase_4/maps/fish_palette_3cmla_4.png`) will be changed to be local to the folder set in your project, instead. Default value is `res://maps`.
+
+## Force Import Possible Animations
+Forces files that are detected as animations to be imported as models. This is entirely unsupported behavior, and you won't get any assistance if things break.
+
+# Animation Import Options
+## Use Blender Layout
+Uses the same layout as if the animation were imported through Blender via the `blender-egg-importer`. If disabled, skips the root bundle name, as it has no animation values associated with it.
+
+## Loop Animation
+Determines whether or not the animation should import as infinitely looping.
+
+## Apply Corporate Clash Fixes
+Corporate Clash animation files have an odd format that breaks in things like importers, but works just fine in-game. When enabled, this will replace some text in the parsed EGG file to make Corporate Clash animations work. **NOTE**: You should not use Corporate Clash files without the express permission of their staff.
+
+## Apply Very Stupid Fix
+Some models imported through `blender-egg-importer` can have this oddity where bones have a `_2` tacked onto their names. Enabling this will fix that for animations, but you should leave it disabled, otherwise.
